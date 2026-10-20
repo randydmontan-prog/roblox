@@ -7,7 +7,7 @@
 	Responsibilities:
 	  * Owns the possession RemoteEvents and validates every request.
 	  * Spawns players as ghosts (CharacterAutoLoads is disabled; this service
-	    controls every LoadCharacter call).
+	    controls every LoadCharacterAsync call).
 	  * Swaps Player.Character between the ghost and a possessed NPC, hands the
 	    NPC assembly's network ownership to the possessing player and takes it
 	    back on ejection.
@@ -219,7 +219,7 @@ local function publishState(player: Player, state: PlayerState)
 	player:SetAttribute(Attributes.Duration, if classConfig then classConfig.Duration else nil)
 	player:SetAttribute(Attributes.ExpiresAt, if state.npc then state.expiresAt else nil)
 	player:SetAttribute(Attributes.RepossessReadyAt, state.repossessReadyAt)
-	for _, slot in PossessionConfig.AbilitySlots do
+	for _, slot: AbilitySlot in PossessionConfig.AbilitySlots do
 		player:SetAttribute(PossessionConfig.AbilityReadyAttribute(slot), state.abilityReadyAt[slot] or 0)
 	end
 end
@@ -286,6 +286,8 @@ local function applyGhostVisual(instance: Instance)
 	if instance:IsA("BasePart") then
 		instance.CollisionGroup = PossessionConfig.CollisionGroups.Ghost
 		instance.CastShadow = false
+		-- Ghosts must not fire Touched-based triggers (pressure plates, objective zones, ...).
+		instance.CanTouch = false
 		instance.Massless = instance.Name ~= "HumanoidRootPart"
 		if instance.Name ~= "HumanoidRootPart" then
 			instance.Transparency = math.max(instance.Transparency, PossessionConfig.Ghost.Transparency)
@@ -331,7 +333,7 @@ local function setupGhost(player: Player, character: Model)
 	humanoid.Died:Connect(function()
 		task.delay(PossessionConfig.Ghost.RespawnDelay, function()
 			if player.Parent and player.Character == character then
-				player:LoadCharacter()
+				player:LoadCharacterAsync()
 			end
 		end)
 	end)
@@ -400,7 +402,7 @@ local function restoreGhost(player: Player, state: PlayerState, exitCFrame: CFra
 			if not player.Parent then
 				return
 			end
-			player:LoadCharacter()
+			player:LoadCharacterAsync()
 			local character = player.Character
 			if exitCFrame and character and states[player] == state then
 				character:PivotTo(exitCFrame)
@@ -623,7 +625,11 @@ local function updateGeneratorVisuals(generator: Instance, progress: number)
 		core.Color = PossessionConfig.Generator.BrokenColor:Lerp(PossessionConfig.Generator.RepairedColor, alpha)
 	end
 	for _, descendant in generator:GetDescendants() do
-		if descendant:IsA("Smoke") or descendant:IsA("Fire") or descendant:IsA("ParticleEmitter") then
+		if descendant:IsA("Smoke") then
+			descendant.Enabled = not repaired
+		elseif descendant:IsA("Fire") then
+			descendant.Enabled = not repaired
+		elseif descendant:IsA("ParticleEmitter") then
 			descendant.Enabled = not repaired
 		elseif descendant:IsA("Light") then
 			descendant.Enabled = repaired
@@ -710,7 +716,7 @@ local function useAbility(player: Player, slotValue: unknown)
 		return
 	end
 
-	local slot = PossessionConfig.ToAbilitySlot(slotValue)
+	local slot: AbilitySlot? = PossessionConfig.ToAbilitySlot(slotValue)
 	if not slot then
 		return
 	end
@@ -774,7 +780,7 @@ local function onCharacterAdded(player: Player, character: Model)
 		return
 	end
 
-	-- A fresh LoadCharacter while possessing (e.g. from another system) releases the host.
+	-- A fresh LoadCharacterAsync while possessing (e.g. from another system) releases the host.
 	if state.npc then
 		releaseNpc(state)
 		publishState(player, state)
@@ -813,7 +819,7 @@ local function onPlayerAdded(player: Player)
 		onCharacterAdded(player, character)
 	end)
 
-	player:LoadCharacter()
+	player:LoadCharacterAsync()
 end
 
 local function onPlayerRemoving(player: Player)

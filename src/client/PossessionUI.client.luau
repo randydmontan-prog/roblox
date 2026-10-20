@@ -440,7 +440,7 @@ local function rebuildForClass(classConfig: NpcClassConfig?)
 	classLabel.Text = string.upper(classConfig.DisplayName)
 	accentBar.BackgroundColor3 = classConfig.AccentColor
 
-	for index, slot in PossessionConfig.AbilitySlots do
+	for index, slot: AbilitySlot in PossessionConfig.AbilitySlots do
 		local ability = PossessionConfig.GetAbility(classConfig, slot)
 		if ability then
 			table.insert(abilitySlots, createAbilitySlot(slot, ability, index, classConfig.AccentColor))
