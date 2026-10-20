@@ -139,6 +139,23 @@ local function passesRateLimit(state: PlayerState, key: string): boolean
 	return true
 end
 
+-- Spawns a fresh character. Falls back to the legacy API on Studio builds that
+-- predate LoadCharacterAsync, so players are never left without a body.
+local function spawnCharacter(player: Player)
+	if not player.Parent then
+		return
+	end
+	local ok, err = pcall(function()
+		player:LoadCharacterAsync()
+	end)
+	if not ok then
+		warn(`[PossessionService] LoadCharacterAsync failed for {player.Name} ({err}); using LoadCharacter`)
+		if player.Parent then
+			(player :: any):LoadCharacter()
+		end
+	end
+end
+
 local function disconnectAll(connections: { RBXScriptConnection })
 	for _, connection in connections do
 		connection:Disconnect()
@@ -333,7 +350,7 @@ local function setupGhost(player: Player, character: Model)
 	humanoid.Died:Connect(function()
 		task.delay(PossessionConfig.Ghost.RespawnDelay, function()
 			if player.Parent and player.Character == character then
-				player:LoadCharacterAsync()
+				spawnCharacter(player)
 			end
 		end)
 	end)
@@ -402,7 +419,7 @@ local function restoreGhost(player: Player, state: PlayerState, exitCFrame: CFra
 			if not player.Parent then
 				return
 			end
-			player:LoadCharacterAsync()
+			spawnCharacter(player)
 			local character = player.Character
 			if exitCFrame and character and states[player] == state then
 				character:PivotTo(exitCFrame)
@@ -819,7 +836,7 @@ local function onPlayerAdded(player: Player)
 		onCharacterAdded(player, character)
 	end)
 
-	player:LoadCharacterAsync()
+	spawnCharacter(player)
 end
 
 local function onPlayerRemoving(player: Player)
